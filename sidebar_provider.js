@@ -6,49 +6,68 @@ class SidebarProvider {
     }
 
     resolveWebviewView(webviewView) {
-        this._view = webviewView;
+      this._view = webviewView;
 
-        webviewView.webview.options = {
-            enableScripts: true,
-            localResourceRoots: [this._extensionUri],
-        };
+      webviewView.webview.options = {
+        enableScripts: true,
+        localResourceRoots: [this._extensionUri],
+      };
 
-        webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
+      webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
-        webviewView.webview.onDidReceiveMessage(async (data) => {
-            switch (data.type) {
-                case "onFetchText": {
-                    let editor = vscode.window.activeTextEditor;
+      webviewView.webview.onDidReceiveMessage(message => {
+        if (message.command === 'toggleSuggestion') {
+          this.toggleSuggestion(message.code, message.line);
+        }
+      });
 
-                    if (editor === undefined) {
-                        vscode.window.showErrorMessage('No active text editor');
-                        return;
-                    }
+      webviewView.webview.onDidReceiveMessage(async (data) => {
+        switch (data.type) {
+          case "onFetchText": {
+            let editor = vscode.window.activeTextEditor;
 
-                    let text = editor.document.getText(editor.selection);
-                    this._view?.webview.postMessage({ type: "onSelectedText", value: text });
-                    break;
-                }
-                case "onInfo": {
-                    if (!data.value) {
-                        return;
-                    }
-                    vscode.window.showInformationMessage(data.value);
-                    break;
-                }
-                case "onError": {
-                    if (!data.value) {
-                        return;
-                    }
-                    vscode.window.showErrorMessage(data.value);
-                    break;
-                }
+            if (editor === undefined) {
+              vscode.window.showErrorMessage('No active text editor');
+              return;
             }
-        });
+
+            let text = editor.document.getText(editor.selection);
+            this._view?.webview.postMessage({ type: "onSelectedText", value: text });
+            break;
+          }
+          case "onInfo": {
+            if (!data.value) {
+              return;
+            }
+            vscode.window.showInformationMessage(data.value);
+            break;
+          }
+          case "onError": {
+            if (!data.value) {
+              return;
+            }
+            vscode.window.showErrorMessage(data.value);
+            break;
+          }
+        }
+      });
+    }
+
+    toggleSuggestion(code, line) {
+      const editor = vscode.window.activeTextEditor;
+      var lineNumber = Number(line)
+      var before = lineNumber - 1
+
+      if (editor) {
+        editor.edit(editBuilder => {
+          editBuilder.insert(new vscode.Position(before, 0), '<<<<<<< HEAD\n');
+          editBuilder.insert(new vscode.Position(lineNumber, 0), '=======\n' + code + '\n>>>>>>> Suggested Fix\n');
+        })
+      }
     }
 
     revive(panel) {
-        this._view = panel;
+      this._view = panel;
     }
 
     _getHtmlForWebview(webview) {
@@ -58,23 +77,97 @@ class SidebarProvider {
             <html lang="en">
             <head>
               <style>
-                .bug_list > p {
+                .list_item {
+                  padding: 10px;
+                  background-color: #1c2433;
+                  margin-bottom: 10px;
+                  border-radius: 5px;
+                }
+
+                .list_item > p {
+                  margin: 0px;
+                  padding: 0px;
                   font-weight: 600;
+                  display: -webkit-box;
                   text-overflow: ellipsis;
                   overflow: hidden;
-                  white-space: nowrap;
+                  -webkit-box-orient: vertical;
+                  -webkit-line-clamp: 3;
+                }
+                
+                .list_item button {
+                  background-color: #6b77fd;
+                  color: white;
+                  padding: 5px 10px;
+                  border: none;
+                  margin-top: 10px;
+                  display: flex;
+                  margin-left: auto;
                   cursor: pointer;
-                  text-decoration: underline;
                 }
               </style>
 
               <script>
+                var code = [
+                  "===== code =====",
+                  "import React, { useState } from 'react';",
+                  "",
+                  "function BugComponent(){",
+                  "  const [count, setCount] = useState(0);",
+                  "  const handleIncrement = () => {",
+                  "    setCount(count + 1);  ",
+                  "  };",
+                  "  return (",
+                  "    <div>",
+                  "      <h1>Buggy React Component</h1>",
+                  "      <p>Current count: {count}</p>",
+                  "      <button onClick={handleIncrement}>Increment</button>",
+                  "    </div>",
+                  "  );",
+                  "}",
+                  "",
+                  "export function BugComponent;",
+                  "==========",
+                ].join("\\n");
+
+                const bugList = [
+                  {
+                    title: "Bug 1",
+                    code: code,
+                    stack_trace: "TypeError: Invalid attempt to destructure non-iterable instance at BugComponent (BugComponent.js:4)",
+                    line: 4,
+                  },
+                  {
+                    title: "Bug 2",
+                    code: code,
+                    stack_trace: "SyntaxError: Unexpected token ';'. Expected a declaration (8:22) at BugComponent.js:16",
+                    line: 16,
+                  },
+                ]
+
+                function renderBugList() {
+                  var list = document.getElementById("bug_list");
+                  bugList.forEach((bug) => {
+                    var item = document.createElement("div");
+                    item.className = "list_item";
+                    item.innerHTML = '<p data-code="' + bug.code + '" data-line="' + bug.line + '">' + bug.stack_trace + '</p><button onclick="callOpenAi()"">Suggest Fix</button>';
+                    list.appendChild(item);
+                  })
+                }
+
+                window.onload = function() {
+                  renderBugList();
+                }
+
+                const vscode = acquireVsCodeApi();
+
                 function callOpenAi() {
-                  var text = event.target.innerText;
-                  var code = event.target.getAttribute("data-code");
+                  var stack_trace = event.target.parentElement.innerText;
+                  var code = event.target.parentElement.querySelector('p').getAttribute("data-code");
+                  var line = event.target.parentElement.querySelector('p').getAttribute("data-line");
 
                   var myHeaders = new Headers();
-                  var token = "OPENAI_API_KEY";
+                  var token = "INSERT TOKEN HERE";
                   myHeaders.append("Content-Type", "application/json");
                   myHeaders.append("Accept", "application/json");
                   myHeaders.append("Authorization", "Bearer " + token);
@@ -85,7 +178,7 @@ class SidebarProvider {
                       "messages": [
                         {
                           "role": "user",
-                          "content": text
+                          "content": stack_trace
                         },
                         {
                           "role": "user",
@@ -93,7 +186,7 @@ class SidebarProvider {
                         },
                         {
                           "role": "user",
-                          "content": "look at the stack trace referenced in this message and respond in valid JSON where the first key is 'human_readable_error' and value is a human readable explanation of the error, and the second key is 'code_suggestion' and the value is valid Javascript that would fix the error without textual explanation, and a third key that is 'line_number' with the line number where the code suggestion should be"
+                          "content": "look at the stack trace and code referenced in this message and respond in valid JSON where the first key is 'human_readable_error' and value is a human readable explanation of the error, and the second key is 'code_suggestion' and the value is valid Javascript that could be replaced with the entire line relevant without ANY textual explanation, and a third key that is 'line_number' with the line number where the code suggestion should be"
                         },    
                       ],
                       "temperature": 0.5,
@@ -123,27 +216,26 @@ class SidebarProvider {
                     var code = JSON.parse(json.choices[0].message.content);
                     resultsP.innerHTML = code.human_readable_error;
                     resultsCode.innerHTML = code.code_suggestion;
+
+                    vscode.postMessage({ command: 'toggleSuggestion', code: code.code_suggestion, line: line });
                   })
                   .catch(error => console.log('error', error));
                 }
               </script>
             </head>
             <body>
-                <div id="app">
-                  <div class="bug_list">
-                    <p onclick="callOpenAi()"
-                       data-code="import React, { useState } from 'react';function BugComponent(){const [count, setCount] = useState;  const handleIncrement = () => {    setCount(count + 1);  };  return (    <div>      <h1>Buggy React Component</h1><p>Current count: {conut}</p><button onClick={handleIncrement}>Increment</button></div>);} export default BugComponent;">
-                      Uncaught ReferenceError: setcount is not defined at handleIncrement (App.jsx:9:5) at HTMLUnknownElement.callCallback2 (react-dom.development.js:4164:14) at Object.invokeGuardedCallbackDev (react-dom.development.js:4213:16) at invokeGuardedCallback (react-dom.development.js:4277:31) at invokeGuardedCallbackAndCatchFirstError (react-dom.development.js:4291:25) at executeDispatch (react-dom.development.js:9041:3) at processDispatchQueueItemsInOrder (react-dom.development.js:9073:7) at processDispatchQueue (react-dom.development.js:9086:5) at dispatchEventsForPlugins (react-dom.development.js:9097:3) at react-dom.development.js:9288:12
-                    </p>
-                  <div id="results">
-                    <h2>Results</h2>
-                    <p></p>
-                    <code></code>
-                  </div>
-                </div>
-                <script>
+              <div id="app">
+                <h4>BUGS</h4>
+                <div id="bug_list"></div>
 
-                </script>
+                <div id="results">
+                  <h4>RESULTS</h4>
+                  <p></p>
+                  <code class="language-javascript"></code>
+                </div>
+              </div>
+              <script>
+              </script>
             </body>
           </html>
         `;
