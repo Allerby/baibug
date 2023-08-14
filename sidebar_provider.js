@@ -134,13 +134,13 @@ class SidebarProvider {
                   {
                     title: "Bug 1",
                     code: code,
-                    stack_trace: "TypeError: Invalid attempt to destructure non-iterable instance at BugComponent (BugComponent.js:4)",
+                    stack_trace: "Stacktrace: TypeError: Invalid attempt to destructure non-iterable instance at BugComponent (BugComponent.js:4)",
                     line: 4,
                   },
                   {
                     title: "Bug 2",
                     code: code,
-                    stack_trace: "SyntaxError: Unexpected token ';'. Expected a declaration (8:22) at BugComponent.js:16",
+                    stack_trace: "Stacktrace: SyntaxError: Unexpected token ';'. Expected a declaration (8:22) at BugComponent.js:16",
                     line: 16,
                   },
                 ]
@@ -186,14 +186,14 @@ class SidebarProvider {
                         },
                         {
                           "role": "user",
-                          "content": "look at the stack trace and code referenced in this message and respond in valid JSON where the first key is 'human_readable_error' and value is a human readable explanation of the error, and the second key is 'code_suggestion' and the value is valid Javascript that could be replaced with the entire line relevant without ANY textual explanation, and a third key that is 'line_number' with the line number where the code suggestion should be"
+                          "content": "look at the stack trace and code referenced in this message and respond in valid JSON where the first key is 'human_readable_error' and value is a detailed 2 sentence explanation of the error and how the following code_suggestion will fix the issue, and the second key is 'code_suggestion' and the value is ONLY valid Javascript that could be replaced with the entire relevant line without ANY explanation or instruction, just code"
                         },    
                       ],
                       "temperature": 0.5,
                       "top_p": 1,
                       "n": 1,
                       "stream": false,
-                      "max_tokens": 350,
+                      "max_tokens": 2000,
                       "presence_penalty": 0,
                       "frequency_penalty": 0
                     }
